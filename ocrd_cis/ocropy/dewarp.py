@@ -34,6 +34,8 @@ class InadequateLine(Exception):
 
 # from ocropus-dewarp, but without resizing
 def dewarp(image, lnorm, check=True, max_neighbour=0.02, zoom=1.0):
+    if not image.width or not image.height:
+        raise InvalidLine('image size is zero')
     line = pil2array(image)
     
     if np.prod(line.shape) == 0:
@@ -79,8 +81,14 @@ class OcropyDewarp(Processor):
     
     def setup(self):
         # defaults from ocrolib.lineest:
-        range_ = self.parameter['range']
-        self.lnorm = lineest.CenterNormalizer(params=(range_, 1.0, 0.3))
+        self.lnorm = lineest.CenterNormalizer(
+            params=(self.parameter['range'],
+                    self.parameter['smoothness'],
+                    # let's not expose this for now
+                    # (otherwise we must explain mutual
+                    #  dependency between smoothness
+                    #  and extra params)
+                    0.3))
         self.logger = getLogger('processor.OcropyDewarp')
 
     def process(self):
@@ -127,7 +135,7 @@ class OcropyDewarp(Processor):
             else:
                 zoom = 1
 
-            regions = page.get_AllRegions(classes=['Text'])
+            regions = page.get_AllRegions(classes=['Text'], order='reading-order')
             if not regions:
                 self.logger.warning('Page "%s" contains no text regions', page_id)
             for region in regions:
@@ -160,8 +168,8 @@ class OcropyDewarp(Processor):
                     file_path = self.workspace.save_image_file(
                         dew_image,
                         file_id + '_' + region.id + '_' + line.id + '.IMG-DEWARP',
-                        page_id=input_file.pageId,
-                        file_grp=self.output_file_grp)
+                        self.output_file_grp,
+                        page_id=input_file.pageId)
                     # update PAGE (reference the image file):
                     alternative_image = line.get_AlternativeImage()
                     line.add_AlternativeImage(AlternativeImageType(

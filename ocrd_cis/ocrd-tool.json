@@ -191,8 +191,25 @@
 			"output_file_grp": [
 				"OCR-D-SEG-LINE"
 			],
-			"description": "Resegment lines with ocropy (by shrinking annotated polygons)",
+			"description": "Improve coordinates of text lines",
 			"parameters": {
+				"level-of-operation": {
+					"type": "string",
+					"enum": ["page", "region"],
+					"description": "PAGE XML hierarchy level to segment textlines in ('region' abides by existing text region boundaries, 'page' optimises lines in the whole page once",
+					"default": "page"
+				},
+				"method": {
+					"type": "string",
+					"enum": ["lineest", "baseline", "ccomps"],
+					"description": "source for new line polygon candidates ('lineest' for line estimation, i.e. how Ocropy would have segmented text lines; 'baseline' tries to re-polygonize from the baseline annotation; 'ccomps' avoids crossing connected components by majority rule)",
+					"default": "lineest"
+				},
+				"baseline_only": {
+					"type": "boolean",
+					"description": "ignore existing textline coords completely and use baseline as input if possible",
+					"default": false
+				},
 				"dpi": {
 					"type": "number",
 					"format": "float",
@@ -202,13 +219,19 @@
 				"min_fraction": {
 					"type": "number",
 					"format": "float",
-					"description": "share of foreground pixels that must be retained by the largest label",
-					"default": 0.8
+					"description": "share of foreground pixels that must be retained by the output polygons",
+					"default": 0.75
+				},
+				"spread": {
+					"type": "number",
+					"format": "float",
+					"description": "distance in points (pt) from the foreground to project textline labels into the background for polygonal contours; if zero, project half a scale/capheight",
+					"default": 2.4
 				},
 				"extend_margins": {
 					"type": "number",
 					"format": "integer",
-					"description": "number of pixels to extend the input polygons horizontally and vertically before intersecting",
+					"description": "(ignored)",
 					"default": 3
 				}
 			}
@@ -238,8 +261,14 @@
 				"range": {
 					"type": "number",
 					"format": "float",
-					"description": "maximum vertical disposition or maximum margin (will be multiplied by mean centerline deltas to yield pixels)",
+					"description": "maximum vertical disposition or maximum margin (will be multiplied by mean centerline deltas to yield pixels); also the mean vertical padding",
 					"default": 4.0
+				},
+				"smoothness": {
+					"type": "number",
+					"format": "float",
+					"description": "kernel size (relative to image height) of horizontal blur applied to foreground to find the center line; the smaller the more dynamic (0.1 would be a better default)",
+					"default": 1.0
 				},
 				"max_neighbour": {
 					"type": "number",
@@ -275,29 +304,37 @@
 				},
 				"model": {
 					"type": "string",
-					"description": "ocropy model to apply (e.g. fraktur.pyrnn)"
+					"format": "uri",
+					"content-type": "application/gzip",
+					"description": "ocropy model to apply (e.g. fraktur.pyrnn.gz)"
 				}
-			}
-		},
-		"ocrd-cis-ocropy-rec": {
-			"executable": "ocrd-cis-ocropy-rec",
-			"categories": [
-				"Text recognition and optimization"
-			],
-			"steps": [
-				"recognition/text-recognition"
-			],
-			"input_file_grp": [
-				"OCR-D-GT-SEG-BLOCK",
-				"OCR-D-SEG-BLOCK"
-			],
-			"description": "Recognize text snippets",
-			"parameters": {
-				"model": {
-					"type": "string",
-					"description": "ocropy model to apply (e.g. fraktur.pyrnn)"
+			},
+			"resources": [
+				{
+					"url": "https://github.com/zuphilip/ocropy-models/raw/master/en-default.pyrnn.gz",
+					"name": "en-default.pyrnn.gz",
+					"description": "Default ocropy model for English",
+					"size": 83826134
+				},
+				{
+					"url": "https://github.com/zuphilip/ocropy-models/raw/master/fraktur.pyrnn.gz",
+					"name": "fraktur.pyrnn.gz",
+					"description": "Default ocropy fraktur model",
+					"size": 43882365
+				},
+				{
+					"url": "https://github.com/jze/ocropus-model_fraktur/raw/master/fraktur.pyrnn.gz",
+					"name": "fraktur-jze.pyrnn.gz",
+					"description": "ocropy fraktur model by github.com/jze",
+					"size": 2961298
+				},
+				{
+					"url": "https://github.com/chreul/OCR_Testdata_EarlyPrintedBooks/raw/master/LatinHist-98000.pyrnn.gz",
+					"name": "LatinHist.pyrnn.gz",
+					"description": "ocropy historical latin model by github.com/chreul",
+					"size": 16989864
 				}
-			}
+			]
 		},
 		"ocrd-cis-ocropy-segment": {
 			"executable": "ocrd-cis-ocropy-segment",
@@ -415,13 +452,15 @@
 			"parameters": {
 				"textequiv_level": {
 					"type": "string",
-					"description": "PAGE XML hierarchy level granularity",
+					"description": "hierarchy level to extract GT pairs from",
 					"enum": ["line", "word", "glyph"],
 					"default": "line"
 				},
 				"model": {
 					"type": "string",
-					"description": "load model or crate new one (e.g. fraktur.pyrnn)"
+					"format": "uri",
+					"content-type": "application/gzip",
+					"description": "load model (e.g. 'fraktur.pyrnn.gz') to init weights, or none to train from scratch"
 				},
 				"ntrain": {
 					"type": "number",

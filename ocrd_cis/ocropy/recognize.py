@@ -1,10 +1,11 @@
 from __future__ import absolute_import
 
+import sys
 import os.path
 import numpy as np
 from PIL import Image
 
-import Levenshtein
+from rapidfuzz.distance import Levenshtein
 
 from ocrd_utils import (
     getLogger,
@@ -34,7 +35,7 @@ TOOL = 'ocrd-cis-ocropy-recognize'
 def resize_keep_ratio(image, baseheight=48):
     scale = baseheight / image.height
     wsize = round(image.width * scale)
-    image = image.resize((wsize, baseheight), Image.ANTIALIAS)
+    image = image.resize((wsize, baseheight), Image.LANCZOS)
     return image, scale
 
 # from ocropus-rpred process1, but without input files and without lineest/dewarping
@@ -102,19 +103,24 @@ class OcropyRecognize(Processor):
                 x.allocate(5000)
 
     def get_model(self):
-        """Search for the model file.  First checks if
-        parameter['model'] is a valid readeable file and returns it.
-        If not, it checks if the model can be found in the
+        """Search for the model file.  First checks if parameter['model'] can
+        be resolved with OcrdResourceManager to a valid readeable file and
+        returns it.  If not, it checks if the model can be found in the
         dirname(__file__)/models/ directory."""
         canread = lambda p: os.path.isfile(p) and os.access(p, os.R_OK)
-        model = self.parameter['model']
-        if canread(model):
-            return model
-        ocropydir = os.path.dirname(os.path.abspath(__file__))
-        path = os.path.join(ocropydir, 'models', model)
-        if canread(path):
-            return path
-        return model
+        try:
+            model = self.resolve_resource(self.parameter['model'])
+            if canread(model):
+                return model
+        except SystemExit:
+            ocropydir = os.path.dirname(os.path.abspath(__file__))
+            path = os.path.join(ocropydir, 'models', self.parameter['model'])
+            self.logger.info("Failed to resolve model with OCR-D/core mechanism, trying %s", path)
+            if canread(path):
+                return path
+        self.logger.error("Could not find model %s. Try 'ocrd resmgr download ocrd-cis-ocropy-recognize %s",
+                self.parameter['model'], self.parameter['model'])
+        sys.exit(1)
 
     def process(self):
         """Recognize lines / words / glyphs of the workspace.
@@ -164,7 +170,7 @@ class OcropyRecognize(Processor):
             self.process_regions(regions, maxlevel, page_image, page_coords)
 
             # update METS (add the PAGE file):
-            file_id = make_file_id(input_file.ID, self.output_file_grp)
+            file_id = make_file_id(input_file, self.output_file_grp)
             file_path = os.path.join(self.output_file_grp, file_id + '.xml')
             pcgts.set_pcGtsId(file_id)
             out = self.workspace.add_file(

@@ -38,16 +38,16 @@ setup(
     packages=find_packages(),
     include_package_data=True,
     install_requires=[
-        'ocrd>=2.13',
+        'ocrd>=2.47',
         'click',
         'scipy',
         'numpy>=1.17.0',
         'pillow>=7.1.2',
         'shapely>=1.7.1',
         'scikit-image',
+        'networkx',
         'opencv-python-headless',
-        'python-Levenshtein',
-        'calamari_ocr == 0.3.5'
+        'rapidfuzz'
     ],
     extras_require={
         'debug': ['matplotlib>3.0.0'],
